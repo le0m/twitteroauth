@@ -292,9 +292,15 @@ class TwitterOAuth extends Config
      */
     private function uploadMediaNotChunked($path, array $parameters)
     {
-        if (! is_readable($parameters['media']) ||
-            ($file = file_get_contents($parameters['media'])) === false) {
-            throw new \InvalidArgumentException('You must supply a readable file');
+        if (is_resource($parameters['media'])
+            && ($file = stream_get_contents($parameters['media'])) === false) {
+            throw new \InvalidArgumentException('You must supply a readable file stream');
+        }
+        else {
+            if (! is_readable($parameters['media'])
+                || ($file = file_get_contents($parameters['media'])) === false) {
+                throw new \InvalidArgumentException('You must supply a readable file');
+            }
         }
         $parameters['media'] = base64_encode($file);
         return $this->http('POST', self::UPLOAD_HOST, $path, $parameters, false);
@@ -313,7 +319,14 @@ class TwitterOAuth extends Config
         $init = $this->http('POST', self::UPLOAD_HOST, $path, $this->mediaInitParameters($parameters), false);
         // Append
         $segmentIndex = 0;
-        $media = fopen($parameters['media'], 'rb');
+
+        if (is_resource($parameters['media'])) {
+            $media = $parameters['media'];
+        }
+        else {
+            $media = fopen($parameters['media'], 'rb');
+        }
+
         while (!feof($media)) {
             $this->http('POST', self::UPLOAD_HOST, 'media/upload', [
                 'command' => 'APPEND',
@@ -341,10 +354,21 @@ class TwitterOAuth extends Config
      */
     private function mediaInitParameters(array $parameters)
     {
+        if (is_resource($parameters['media'])) {
+            if (!isset($parameters['media_size'])) {
+                throw new \InvalidArgumentException('You must supply the "media_size" parameter when using a file resource.');
+            }
+
+            $size = $parameters['media_size'];
+        }
+        else {
+            $size = filesize($parameters['media']);
+        }
+
         $return = [
             'command' => 'INIT',
             'media_type' => $parameters['media_type'],
-            'total_bytes' => filesize($parameters['media'])
+            'total_bytes' => $size
         ];
         if (isset($parameters['additional_owners'])) {
             $return['additional_owners'] = $parameters['additional_owners'];
