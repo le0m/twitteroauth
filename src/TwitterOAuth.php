@@ -328,12 +328,15 @@ class TwitterOAuth extends Config
             $media = fopen($parameters['media'], 'rb');
         }
 
+        // set PHP stream chunk size (better safe than sorry)
+        stream_set_chunk_size($media, $this->chunkSize);
+
         while (!feof($media)) {
             $this->http('POST', self::UPLOAD_HOST, 'media/upload', [
                 'command' => 'APPEND',
                 'media_id' => $init->media_id_string,
                 'segment_index' => $segmentIndex++,
-                'media_data' => base64_encode(fread($media, $this->chunkSize))
+                'media_data' => base64_encode(stream_get_contents($media, $this->chunkSize))
             ], false);
         }
         fclose($media);
